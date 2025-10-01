@@ -1,0 +1,193 @@
+# Social Network Mutations
+
+mutation CreateUser($userId: String!, $displayName: String!, $profilePic: String) {
+  user_insert(data: {
+    userId: $userId,
+    displayName: $displayName,
+    profilePic: $profilePic
+  })
+}
+
+mutation UpdateUser($userId: String!, $displayName: String, $profilePic: String) {
+  user_update(userId: $userId, data: {
+    displayName: $displayName,
+    profilePic: $profilePic
+  })
+}
+
+mutation FollowUser($userId: String!, $targetUserId: String!) {
+  user_update(userId: $userId, data: {
+    following_append: [$targetUserId]
+  })
+  user_update(userId: $targetUserId, data: {
+    followers_append: [$userId]
+  })
+}
+
+mutation UnfollowUser($userId: String!, $targetUserId: String!) {
+  user_update(userId: $userId, data: {
+    following_remove: [$targetUserId]
+  })
+  user_update(userId: $targetUserId, data: {
+    followers_remove: [$userId]
+  })
+}
+
+mutation CreatePost($userId: String!, $content: String!, $mediaUrl: String) {
+  post_insert(data: {
+    userId: $userId,
+    content: $content,
+    mediaUrl: $mediaUrl
+  })
+}
+
+mutation DeletePost($postId: UUID!) {
+  post_delete(postId: $postId)
+}
+
+mutation SendMessage($senderId: String!, $receiverId: String!, $content: String!) {
+  message_insert(data: {
+    senderId: $senderId,
+    receiverId: $receiverId,
+    content: $content
+  })
+}
+
+mutation AcceptMessage($messageId: UUID!) {
+  message_update(messageId: $messageId, data: {
+    status: "accepted"
+  })
+}
+
+mutation CreateCourse($title: String!, $creatorId: String!, $materials: [String!]) {
+  course_insert(data: {
+    title: $title,
+    creatorId: $creatorId,
+    materials: $materials
+  })
+}
+
+mutation EnrollInCourse($courseId: UUID!, $userId: String!) {
+  course_update(courseId: $courseId, data: {
+    enrolledUsers_append: [$userId]
+  })
+}
+
+mutation CreateMeeting($courseId: String!, $title: String!, $description: String, $scheduledTime: Timestamp!, $participants: [String!]!) {
+  meeting_insert(data: {
+    courseId: $courseId,
+    title: $title,
+    description: $description,
+    scheduledTime: $scheduledTime,
+    participants: $participants
+  })
+}
+
+# Audio Room Mutations
+
+mutation CreateAudioRoom($title: String!, $description: String, $host_id: String!, $host_name: String!, $max_participants: Int, $allow_chat: Boolean, $allow_media: Boolean, $allow_screen_share: Boolean, $is_muted_by_default: Boolean) {
+  audioRoom_insert(data: {
+    title: $title,
+    description: $description,
+    host_id: $host_id,
+    host_name: $host_name,
+    max_participants: $max_participants,
+    allow_chat: $allow_chat,
+    allow_media: $allow_media,
+    allow_screen_share: $allow_screen_share,
+    is_muted_by_default: $is_muted_by_default
+  })
+}
+
+mutation UpdateAudioRoom($id: UUID!, $title: String, $description: String, $allow_chat: Boolean, $allow_media: Boolean, $allow_screen_share: Boolean, $is_muted_by_default: Boolean) {
+  audioRoom_update(id: $id, data: {
+    title: $title,
+    description: $description,
+    allow_chat: $allow_chat,
+    allow_media: $allow_media,
+    allow_screen_share: $allow_screen_share,
+    is_muted_by_default: $is_muted_by_default,
+    updated_at: "request.time"
+  })
+}
+
+mutation DeleteAudioRoom($id: UUID!) {
+  audioRoom_delete(id: $id)
+}
+
+mutation JoinRoom($room_id: UUID!, $user_id: String!, $user_name: String!, $is_host: Boolean) {
+  roomParticipant_insert(data: {
+    room_id: $room_id,
+    user_id: $user_id,
+    user_name: $user_name,
+    is_host: $is_host
+  })
+}
+
+mutation LeaveRoom($room_id: UUID!, $user_id: String!) {
+  roomParticipant_deleteMany(where: {
+    room_id: { _eq: $room_id },
+    user_id: { _eq: $user_id }
+  })
+}
+
+mutation ToggleMuteParticipant($room_id: UUID!, $user_id: String!, $is_muted: Boolean!) {
+  roomParticipant_updateMany(
+    where: {
+      room_id: { _eq: $room_id },
+      user_id: { _eq: $user_id }
+    },
+    data: {
+      is_muted: $is_muted
+    }
+  )
+}
+
+mutation SendChatMessage($room_id: UUID!, $user_id: String!, $user_name: String!, $message: String!, $message_type: String, $media_url: String) {
+  chatMessage_insert(data: {
+    room_id: $room_id,
+    user_id: $user_id,
+    user_name: $user_name,
+    message: $message,
+    message_type: $message_type,
+    media_url: $media_url
+  })
+}
+
+mutation DeleteChatMessage($id: UUID!) {
+  chatMessage_delete(id: $id)
+}
+
+# # Example mutations for a simple movie app
+
+# # Create a movie based on user input
+# mutation CreateMovie($title: String!, $genre: String!, $imageUrl: String!)
+# @auth(level: USER_EMAIL_VERIFIED) {
+#   movie_insert(data: { title: $title, genre: $genre, imageUrl: $imageUrl })
+# }
+
+# # Upsert (update or insert) a user's username based on their auth.uid
+# mutation UpsertUser($username: String!) @auth(level: USER) {
+#   # The "auth.uid" server value ensures that users can only register their own user.
+#   user_upsert(data: { id_expr: "auth.uid", username: $username })
+# }
+
+# # Add a review for a movie
+# mutation AddReview($movieId: UUID!, $rating: Int!, $reviewText: String!)
+# @auth(level: USER) {
+#   review_upsert(
+#     data: {
+#       userId_expr: "auth.uid"
+#       movieId: $movieId
+#       rating: $rating
+#       reviewText: $reviewText
+#       # reviewDate defaults to today in the schema. No need to set it manually.
+#     }
+#   )
+# }
+
+# # Logged in user can delete their review for a movie
+# mutation DeleteReview($movieId: UUID!) @auth(level: USER) {
+#   # The "auth.uid" server value ensures that users can only delete their own reviews.
+#   review_delete(key: { userId_expr: "auth.uid", movieId: $movieId })
+# }

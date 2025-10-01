@@ -1,0 +1,254 @@
+# Social Network Queries
+
+query GetUser($userId: String!) {
+  user(userId: $userId) {
+    userId
+    displayName
+    profilePic
+    following
+    followers
+  }
+}
+
+query GetPosts($userId: String) {
+  posts(
+    where: { userId: { _eq: $userId } },
+    orderBy: { timestamp: DESC }
+  ) {
+    postId
+    userId
+    content
+    mediaUrl
+    timestamp
+  }
+}
+
+query GetFeed($following: [String!]!) {
+  posts(
+    where: { userId: { _in: $following } },
+    orderBy: { timestamp: DESC }
+  ) {
+    postId
+    userId
+    content
+    mediaUrl
+    timestamp
+  }
+}
+
+query GetMessages($userId: String!) {
+  messages(
+    where: {
+      _or: [
+        { senderId: { _eq: $userId } },
+        { receiverId: { _eq: $userId } }
+      ]
+    },
+    orderBy: { timestamp: DESC }
+  ) {
+    messageId
+    senderId
+    receiverId
+    content
+    status
+    timestamp
+  }
+}
+
+query GetCourses($creatorId: String) {
+  courses(
+    where: { creatorId: { _eq: $creatorId } },
+    orderBy: { title: ASC }
+  ) {
+    courseId
+    title
+    creatorId
+    enrolledUsers
+    materials
+  }
+}
+
+query GetEnrolledCourses($userId: String!) {
+  courses(
+    where: { enrolledUsers: { _contains: $userId } },
+    orderBy: { title: ASC }
+  ) {
+    courseId
+    title
+    creatorId
+    enrolledUsers
+    materials
+  }
+}
+
+query GetMeetings($courseId: String!) {
+  meetings(
+    where: { courseId: { _eq: $courseId } },
+    orderBy: { scheduledTime: ASC }
+  ) {
+    meetingId
+    courseId
+    title
+    description
+    scheduledTime
+    participants
+  }
+}
+
+# Audio Room Queries
+
+query GetAllAudioRooms {
+  audioRooms(where: { is_active: { _eq: true } }, orderBy: { created_at: DESC }) {
+    id
+    title
+    description
+    host_id
+    host_name
+    max_participants
+    allow_chat
+    allow_media
+    allow_screen_share
+    is_muted_by_default
+    created_at
+    updated_at
+  }
+}
+
+query GetAudioRoom($id: UUID!) {
+  audioRoom(id: $id) {
+    id
+    title
+    description
+    host_id
+    host_name
+    max_participants
+    is_active
+    allow_chat
+    allow_media
+    allow_screen_share
+    is_muted_by_default
+    created_at
+    updated_at
+  }
+}
+
+query GetRoomParticipants($room_id: UUID!) {
+  roomParticipants(where: { room_id: { _eq: $room_id } }, orderBy: { joined_at: ASC }) {
+    id
+    user_id
+    user_name
+    is_host
+    is_muted
+    joined_at
+  }
+}
+
+query GetChatMessages($room_id: UUID!) {
+  chatMessages(
+    where: { room_id: { _eq: $room_id } },
+    orderBy: { created_at: ASC }
+  ) {
+    id
+    user_id
+    user_name
+    message
+    message_type
+    media_url
+    created_at
+  }
+}
+
+query GetUserRooms($user_id: String!) {
+  audioRooms(
+    where: {
+      host_id: { _eq: $user_id },
+      is_active: { _eq: true }
+    },
+    orderBy: { created_at: DESC }
+  ) {
+    id
+    title
+    description
+    max_participants
+    created_at
+  }
+}
+
+# # Example queries for a simple movie app.
+
+# # @auth() directives control who can call each operation.
+# # Anyone should be able to list all movies, so the auth level is set to PUBLIC
+# query ListMovies @auth(level: PUBLIC) {
+#   movies {
+#     id
+#     title
+#     imageUrl
+#     genre
+#   }
+# }
+
+# # List all users, only admins should be able to list all users, so we use NO_ACCESS
+# query ListUsers @auth(level: NO_ACCESS) {
+#   users {
+#     id
+#     username
+#   }
+# }
+
+# # Logged in users can list all their reviews and movie titles associated with the review
+# # Since the query uses the uid of the current authenticated user, we set auth level to USER
+# query ListUserReviews @auth(level: USER) {
+#   user(key: { id_expr: "auth.uid" }) {
+#     id
+#     username
+#     # <field>_on_<foreign_key_field> makes it easy to grab info from another table
+#     # Here, we use it to grab all the reviews written by the user.
+#     reviews: reviews_on_user {
+#       rating
+#       reviewDate
+#       reviewText
+#       movie {
+#         id
+#         title
+#       }
+#     }
+#   }
+# }
+
+# # Get movie by id
+# query GetMovieById($id: UUID!) @auth(level: PUBLIC) {
+#   movie(id: $id) {
+#     id
+#     title
+#     imageUrl
+#     genre
+#     metadata: movieMetadata_on_movie {
+#       rating
+#       releaseYear
+#       description
+#     }
+#     reviews: reviews_on_movie {
+#       reviewText
+#       reviewDate
+#       rating
+#       user {
+#         id
+#         username
+#       }
+#     }
+#   }
+# }
+
+# # Search for movies, actors, and reviews
+# query SearchMovie($titleInput: String, $genre: String) @auth(level: PUBLIC) {
+#   movies(
+#     where: {
+#       _and: [{ genre: { eq: $genre } }, { title: { contains: $titleInput } }]
+#     }
+#   ) {
+#     id
+#     title
+#     genre
+#     imageUrl
+#   }
+# }

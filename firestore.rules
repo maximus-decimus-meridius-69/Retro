@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read and write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // Allow reading other user profiles for social features
+    }
+
+    // Course rules
+    match /courses/{courseId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == resource.data.creatorId || request.auth.uid == request.resource.data.creatorId);
+    }
+
+    // Meeting rules
+    match /meetings/{meetingId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.hostId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.hostId || request.auth.uid == request.resource.data.hostId);
+    }
+
+    // Course materials rules
+    match /courseMaterials/{materialId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Posts rules (for social features)
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Resources rules
+    match /resources/{resourceId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Messages rules
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null &&
+        request.auth.uid in resource.data.participants;
+    }
+
+    // Allow all other authenticated operations for now (can be restricted later)
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
