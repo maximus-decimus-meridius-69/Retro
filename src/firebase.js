@@ -32,13 +32,13 @@ import { getDatabase } from "firebase/database"; // ✅ Import Realtime Database
 
 // Firebase config
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBPzK7qLpsNwpEBUQ3CPMFhnliVYeXe8yc",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "instru-d22a4.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "instru-d22a4",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "instru-d22a4.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1626112232",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1626112232:web:51ab909e5012145c8c495d",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-0F7Y9ZCBW9"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
