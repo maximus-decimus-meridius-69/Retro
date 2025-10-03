@@ -7,12 +7,10 @@ import {
   Users,
   Video,
   Plus,
-  Edit3,
   Trash2,
   Play,
   Eye,
   AlertCircle,
-  CheckCircle,
   X
 } from 'lucide-react';
 
@@ -27,24 +25,22 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
   });
   const [error, setError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [uploadingMeeting, setUploadingMeeting] = useState(null);
-  const [meetingMaterials, setMeetingMaterials] = useState({});
-  
+  const [expandedMeeting, setExpandedMeeting] = useState(null);
+  const [uploadStates, setUploadStates] = useState({});
+
   const currentUser = auth.currentUser;
   const navigate = useNavigate();
-  
+
   useEffect(() => {
     if (courseId) {
       loadMeetings();
     }
   }, [courseId]);
-  
+
   const loadMeetings = async () => {
     try {
       setLoading(true);
-      console.log('Loading meetings for course:', courseId);
       const meetingsData = await getMeetings(courseId);
-      console.log('Loaded meetings:', meetingsData);
       setMeetings(meetingsData);
     } catch (error) {
       console.error('Error loading meetings:', error);
@@ -52,24 +48,23 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
       setLoading(false);
     }
   };
-  
+
   const handleScheduleMeeting = async (e) => {
     e.preventDefault();
-    
-    if (isCreating) return; // Prevent double submission
-    
+
+    if (isCreating) return;
+
     if (!formData.title.trim() || !formData.scheduledTime) {
       setError('Please fill in all required fields');
       return;
     }
-    
-    // Check if scheduled time is in the future
+
     const scheduledDate = new Date(formData.scheduledTime);
     if (scheduledDate <= new Date()) {
       setError('Scheduled time must be in the future');
       return;
     }
-    
+
     try {
       setIsCreating(true);
       const meetingData = {
@@ -82,21 +77,16 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
         hostEmail: currentUser.email,
         allowedEmails: enrolledEmails,
         isActive: false,
-        participants: [currentUser.uid, ...enrolledEmails.map((email, index) => `user_${index}`)] // Placeholder for user IDs
+        participants: []
       };
-      
-      console.log('Creating meeting with data:', meetingData);
+
       const meetingId = await createMeeting(meetingData);
-      console.log('Meeting created with ID:', meetingId);
-      
-      // Add the new meeting to the list with the ID
       const newMeeting = { id: meetingId, ...meetingData };
-      console.log('Adding new meeting to list:', newMeeting);
       setMeetings(prev => [...prev, newMeeting]);
       setShowScheduleForm(false);
       setFormData({ title: '', description: '', scheduledTime: '' });
       setError('');
-      
+
       if (onMeetingScheduled) {
         onMeetingScheduled(newMeeting);
       }
@@ -107,69 +97,46 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
       setIsCreating(false);
     }
   };
-  
-  const startMeeting = async (meetingId) => {
-    try {
-      // Navigate to meeting room directly - the meeting room will handle starting the meeting
-      navigate(`/meeting/${meetingId}`);
-    } catch (error) {
-      console.error('Error starting meeting:', error);
-      alert('Failed to start meeting. Please try again.');
-    }
+
+  const startMeeting = (meetingId) => {
+    navigate(`/meeting/${meetingId}`);
   };
-  
+
   const joinMeeting = (meetingId) => {
     navigate(`/meeting/${meetingId}`);
   };
-  
+
   const deleteMeeting = async (meetingId) => {
     if (!confirm('Are you sure you want to delete this meeting?')) {
       return;
     }
-    
+
     try {
-      // Import deleteDoc and doc from firebase/firestore
       const { deleteDoc, doc } = await import('firebase/firestore');
       const { db } = await import('../firebase');
-      
-      // Delete from Firebase
+
       await deleteDoc(doc(db, 'meetings', meetingId));
-      
-      // Remove from UI
       setMeetings(prev => prev.filter(m => m.id !== meetingId));
-      
+
       alert('Meeting deleted successfully');
     } catch (error) {
       console.error('Error deleting meeting:', error);
       alert('Failed to delete meeting');
     }
   };
-  
-  const formatDate = (dateString) => {
-    // Handle Firebase Timestamp objects
-    if (dateString && typeof dateString.toDate === 'function') {
-      return dateString.toDate().toLocaleString();
-    }
-    return new Date(dateString).toLocaleString();
-  };
-  
-  const uploadMaterialToMeeting = async (meetingId, file, title) => {
+
+  const uploadMaterial = async (meetingId, file, title) => {
     try {
-      setUploadingMeeting(meetingId);
-      
-      // Import Firebase storage functions
       const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
       const { storage } = await import('../firebase');
       const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
       const { db } = await import('../firebase');
-      
-      // Upload file to Firebase Storage
+
       const filePath = `meetingMaterials/${meetingId}/${Date.now()}-${file.name}`;
       const fileRef = ref(storage, filePath);
       await uploadBytes(fileRef, file);
       const fileUrl = await getDownloadURL(fileRef);
-      
-      // Save material info to Firestore
+
       await addDoc(collection(db, 'meetingMaterials'), {
         meetingId,
         title: title || file.name,
@@ -180,60 +147,47 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
         uploaderName: currentUser.displayName || currentUser.email,
         createdAt: serverTimestamp()
       });
-      
-      // Update local state
-      if (!meetingMaterials[meetingId]) {
-        setMeetingMaterials(prev => ({ ...prev, [meetingId]: [] }));
-      }
-      
-      alert('Material uploaded successfully');
-      
+
+      alert('Material uploaded successfully!');
     } catch (error) {
       console.error('Error uploading material:', error);
       alert('Failed to upload material');
-    } finally {
-      setUploadingMeeting(null);
     }
   };
-  
-  const handleFileUpload = (meetingId) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '*/*';
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const title = prompt('Enter a title for this material (optional):');
-        uploadMaterialToMeeting(meetingId, file, title);
-      }
-    };
-    input.click();
+
+  const formatDate = (dateString) => {
+    if (dateString && typeof dateString.toDate === 'function') {
+      return dateString.toDate().toLocaleString();
+    }
+    return new Date(dateString).toLocaleString();
   };
-  
+
   const getMeetingStatus = (meeting) => {
     const now = new Date();
     let scheduledTime;
-    
-    // Handle Firebase Timestamp objects
+
     if (meeting.scheduledTime && typeof meeting.scheduledTime.toDate === 'function') {
       scheduledTime = meeting.scheduledTime.toDate();
     } else {
       scheduledTime = new Date(meeting.scheduledTime);
     }
-    
+
     const timeDiff = scheduledTime - now;
-    
+
+    // Check if host has ended the meeting
+    if (meeting.endedAt) {
+      return { status: 'ended', label: 'Ended', color: 'bg-gray-500' };
+    }
+
     if (meeting.isActive) {
-      return { status: 'live', label: 'Live Now', color: 'text-green-400' };
-    } else if (timeDiff > 0 && timeDiff <= 15 * 60 * 1000) { // Within 15 minutes
-      return { status: 'starting-soon', label: 'Starting Soon', color: 'text-yellow-400' };
-    } else if (timeDiff > 0) {
-      return { status: 'scheduled', label: 'Scheduled', color: 'text-blue-400' };
+      return { status: 'live', label: 'Live Now', color: 'bg-green-500' };
+    } else if (timeDiff > 0 && timeDiff <= 15 * 60 * 1000) {
+      return { status: 'starting-soon', label: 'Starting Soon', color: 'bg-yellow-500' };
     } else {
-      return { status: 'ended', label: 'Ended', color: 'text-gray-400' };
+      return { status: 'scheduled', label: 'Scheduled', color: 'bg-blue-500' };
     }
   };
-  
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
@@ -241,13 +195,12 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
           <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
           <div className="space-y-3">
             <div className="h-20 bg-gray-200 rounded"></div>
-            <div className="h-20 bg-gray-200 rounded"></div>
           </div>
         </div>
       </div>
     );
   }
-  
+
   return (
     <div className="bg-white rounded-lg shadow">
       {/* Header */}
@@ -257,7 +210,7 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
             <Video className="w-5 h-5 text-purple-600" />
             <h2 className="text-lg font-semibold text-gray-800">Course Meetings</h2>
           </div>
-          
+
           {isHost && (
             <button
               onClick={() => setShowScheduleForm(true)}
@@ -269,7 +222,7 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
           )}
         </div>
       </div>
-      
+
       {/* Meeting Schedule Form */}
       {showScheduleForm && (
         <div className="p-6 border-b border-gray-200 bg-gray-50">
@@ -288,14 +241,14 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             {error && (
               <div className="flex items-center space-x-2 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700">
                 <AlertCircle className="w-4 h-4" />
                 <span className="text-sm">{error}</span>
               </div>
             )}
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -305,12 +258,12 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g., Week 1: Introduction to React"
+                  placeholder="e.g., Week 1: Introduction"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Scheduled Time *
@@ -325,7 +278,7 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
                 />
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Description
@@ -338,13 +291,13 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
-            
+
             <div className="flex items-center justify-between pt-4">
               <div className="text-sm text-gray-600">
                 <Users className="w-4 h-4 inline mr-1" />
                 {enrolledEmails.length} students will be notified
               </div>
-              
+
               <div className="flex space-x-3">
                 <button
                   type="button"
@@ -365,7 +318,7 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
           </form>
         </div>
       )}
-      
+
       {/* Meetings List */}
       <div className="p-6">
         {meetings.length === 0 ? (
@@ -388,93 +341,83 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
               })
               .map((meeting) => {
                 const status = getMeetingStatus(meeting);
+                const isExpanded = expandedMeeting === meeting.id;
+                const uploadState = uploadStates[meeting.id] || { file: null, title: '', uploading: false };
+
+                const setUploadFile = (file) => {
+                  setUploadStates(prev => ({
+                    ...prev,
+                    [meeting.id]: { ...prev[meeting.id], file }
+                  }));
+                };
+
+                const setUploadTitle = (title) => {
+                  setUploadStates(prev => ({
+                    ...prev,
+                    [meeting.id]: { ...prev[meeting.id], title }
+                  }));
+                };
+
+                const setUploading = (uploading) => {
+                  setUploadStates(prev => ({
+                    ...prev,
+                    [meeting.id]: { ...prev[meeting.id], uploading }
+                  }));
+                };
+
                 return (
                   <div key={meeting.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
                           <h3 className="font-medium text-gray-800">{meeting.title}</h3>
-                          <span className={`text-xs px-2 py-1 rounded-full bg-opacity-10 ${
-                            status.status === 'live' ? 'bg-green-500 text-green-700' :
-                            status.status === 'starting-soon' ? 'bg-yellow-500 text-yellow-700' :
-                            status.status === 'scheduled' ? 'bg-blue-500 text-blue-700' :
-                            'bg-gray-500 text-gray-700'
-                          }`}>
+                          <span className={`text-xs px-2 py-1 rounded-full text-white ${status.color}`}>
                             {status.label}
                           </span>
-                          
-                          {meeting.isRecording && (
-                            <div className="flex items-center space-x-1 text-red-500">
-                              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                              <span className="text-xs">Recording</span>
-                            </div>
-                          )}
                         </div>
-                        
+
                         {meeting.description && (
                           <p className="text-gray-600 text-sm mb-2">{meeting.description}</p>
                         )}
-                        
+
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center space-x-1">
                             <Calendar className="w-4 h-4" />
                             <span>{formatDate(meeting.scheduledTime)}</span>
                           </div>
-                          
+
                           <div className="flex items-center space-x-1">
                             <Users className="w-4 h-4" />
-                            <span>{meeting.allowedEmails.length} invited</span>
+                            <span>{meeting.allowedEmails?.length || 0} invited</span>
                           </div>
-                          
-                          {meeting.recordingUrl && (
-                            <div className="flex items-center space-x-1 text-purple-600">
-                              <Eye className="w-4 h-4" />
-                              <span>Recording available</span>
-                            </div>
-                          )}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2 ml-4">
-                        {/* Upload Material Button - Always visible for hosts */}
-                        {isHost && (
+                        {/* Host can always start */}
+                        {isHost && status.status !== 'ended' && (
                           <button
-                            onClick={() => handleFileUpload(meeting.id)}
-                            disabled={uploadingMeeting === meeting.id}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg disabled:opacity-50"
-                            title="Upload material to meeting"
+                            onClick={() => startMeeting(meeting.id)}
+                            className="flex items-center space-x-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
                           >
-                            {uploadingMeeting === meeting.id ? (
-                              <div className="animate-spin w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full"></div>
-                            ) : (
-                              <Plus className="w-4 h-4" />
-                            )}
+                            <Play className="w-4 h-4" />
+                            <span>Start Meeting</span>
                           </button>
                         )}
-                        
-                        {/* Meeting Action Buttons */}
-                        {isHost && status.status === 'scheduled' && (
-                          <>
-                            <button
-                              onClick={() => startMeeting(meeting.id)}
-                              className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            >
-                              <Play className="w-4 h-4" />
-                              <span>Start</span>
-                            </button>
-                            
-                            <button
-                              onClick={() => deleteMeeting(meeting.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                              title="Delete meeting"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
+
+                        {/* Students can join when live or starting soon */}
+                        {!isHost && (status.status === 'live' || status.status === 'starting-soon') && (
+                          <button
+                            onClick={() => joinMeeting(meeting.id)}
+                            className="flex items-center space-x-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+                          >
+                            <Video className="w-4 h-4" />
+                            <span>Join Meeting</span>
+                          </button>
                         )}
-                        
-                        {/* Delete button for ended meetings */}
-                        {isHost && status.status === 'ended' && (
+
+                        {/* Delete button */}
+                        {isHost && (
                           <button
                             onClick={() => deleteMeeting(meeting.id)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
@@ -483,40 +426,63 @@ const CourseMeetingScheduler = ({ courseId, courseTitle, enrolledEmails = [], is
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
-                        
-                        {isHost && status.status === 'live' && (
-                          <button
-                            onClick={() => joinMeeting(meeting.id)}
-                            className="flex items-center space-x-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                          >
-                            <Video className="w-4 h-4" />
-                            <span>Join</span>
-                          </button>
-                        )}
-                        
-                        {!isHost && (status.status === 'live' || status.status === 'starting-soon') && (
-                          <button
-                            onClick={() => joinMeeting(meeting.id)}
-                            className="flex items-center space-x-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                          >
-                            <Video className="w-4 h-4" />
-                            <span>Join</span>
-                          </button>
-                        )}
-                        
-                        {meeting.recordingUrl && (
-                          <a
-                            href={`http://localhost:3001${meeting.recordingUrl}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center space-x-1 px-3 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50"
-                          >
-                            <Eye className="w-4 h-4" />
-                            <span>Watch</span>
-                          </a>
-                        )}
                       </div>
                     </div>
+
+                    {/* Materials Section - Only for host */}
+                    {isHost && (
+                      <div className="mt-3 pt-3 border-t">
+                        <button
+                          onClick={() => setExpandedMeeting(isExpanded ? null : meeting.id)}
+                          className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                        >
+                          {isExpanded ? '− Hide Materials Upload' : '+ Upload Materials'}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-3 p-4 bg-gray-50 rounded border border-gray-200">
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Material Title (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={uploadState.title}
+                                  onChange={(e) => setUploadTitle(e.target.value)}
+                                  placeholder="e.g., Lecture Slides, Assignment 1"
+                                  className="w-full border rounded px-3 py-2 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Select File
+                                </label>
+                                <input
+                                  type="file"
+                                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                                  className="w-full text-sm"
+                                />
+                              </div>
+                              <button
+                                disabled={!uploadState.file || uploadState.uploading}
+                                onClick={async () => {
+                                  if (!uploadState.file) return;
+                                  setUploading(true);
+                                  await uploadMaterial(meeting.id, uploadState.file, uploadState.title || uploadState.file.name);
+                                  setUploadFile(null);
+                                  setUploadTitle('');
+                                  setUploading(false);
+                                }}
+                                className="w-full px-4 py-2 rounded bg-purple-600 text-white disabled:bg-gray-300 text-sm font-medium hover:bg-purple-700"
+                              >
+                                {uploadState.uploading ? 'Uploading...' : 'Upload Material'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

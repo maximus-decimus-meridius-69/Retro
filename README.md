@@ -1,6 +1,6 @@
-# Retro - Audio Room Application
+# Retro - Music Learning & Social Platform
 
-A real-time audio room application built with React, Socket.IO, and Express.js.
+A comprehensive platform for music learning with social features, course management, and real-time video conferencing built with React, Firebase, Socket.IO, and Express.js.
 
 ## Features
 
@@ -72,8 +72,37 @@ A real-time audio room application built with React, Socket.IO, and Express.js.
 
 ## Technical Details
 
-- **Frontend**: React with Vite
+- **Frontend**: React with Vite + TailwindCSS
 - **Backend**: Express.js with Socket.IO
-- **Media Sharing**: Base64 encoding for direct chat sharing
-- **Real-time Communication**: WebRTC for audio, Socket.IO for chat
-- **No File Storage**: Files are shared directly through chat messages
+- **Database**: Firebase Firestore + Firebase Realtime Database
+- **Storage**: Firebase Storage (all file uploads)
+- **Authentication**: Firebase Auth (Email/Password + Google OAuth)
+- **Real-time Communication**: WebRTC for video/audio, Socket.IO for signaling and chat
+- **Video Meetings**: Custom WebRTC implementation with peer-to-peer connections
+
+## Key Features
+
+### 🎵 Music Learning
+- 8 instruments with learning resources (drums, flute, guitar, tabla, harmonium, saxophone, keyboard, violin)
+- Resource management by skill level
+- Virtual instrument integration
+
+### 👥 Social Network
+- User profiles with follow/unfollow
+- Social feed with posts and images
+- 24-hour stories
+- Direct messaging with request approval
+- User discovery
+
+### 📚 Course Management
+- Create and enroll in courses
+- Course materials with Firebase Storage
+- Meeting scheduling
+- Progress tracking
+
+### 🎥 Video Conferencing
+- Custom WebRTC video meetings
+- Screen sharing
+- Real-time chat
+- Host controls (mute, remove participants)
+- Single session per email enforcement

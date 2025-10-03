@@ -2,14 +2,7 @@ import express from 'express';
 import http from 'http';
 import { Server as SocketIo } from 'socket.io';
 import cors from 'cors';
-import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -23,40 +16,9 @@ const io = new SocketIo(server, {
   pingInterval: 25000
 });
 
-// Create uploads directory if it doesn't exist
-if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
-  fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
-}
-if (!fs.existsSync(path.join(__dirname, 'uploads/recordings'))) {
-  fs.mkdirSync(path.join(__dirname, 'uploads/recordings'), { recursive: true });
-}
-if (!fs.existsSync(path.join(__dirname, 'uploads/materials'))) {
-  fs.mkdirSync(path.join(__dirname, 'uploads/materials'), { recursive: true });
-}
-
-// Multer configuration for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadType = req.body.uploadType || 'materials';
-    cb(null, path.join(__dirname, 'uploads', uploadType));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB limit
-  }
-});
-
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // In-memory storage for rooms and participants
 let audioRooms = [];
@@ -263,152 +225,32 @@ app.post('/api/meetings/:meetingId/start', (req, res) => {
 });
 
 // End a meeting
-app.post('/api/meetings/:meetingId/end', (req, res) => {
+app.post('/api/meetings/:meetingId/end', async (req, res) => {
   const { meetingId } = req.params;
   const { hostId } = req.body;
-  
-  let meeting = null;
-  
-  // Find and update meeting
-  Object.values(courseMeetings).forEach(meetings => {
-    const found = meetings.find(m => m.id === meetingId);
-    if (found) meeting = found;
-  });
-  
-  if (!meeting) {
-    return res.status(404).json({ error: 'Meeting not found' });
+
+  try {
+    // Meeting is in Firebase, so just validate the host and emit event
+    // The client will update Firebase
+    console.log(`Host ${hostId} ending meeting ${meetingId}`);
+
+    // Notify all participants that meeting has ended
+    io.to(meetingId).emit('room-closed');
+
+    // Clear participants from server memory
+    if (roomParticipants[meetingId]) {
+      roomParticipants[meetingId] = [];
+    }
+
+    res.json({ success: true, message: 'Meeting ended' });
+  } catch (err) {
+    console.error('Error ending meeting:', err);
+    res.status(500).json({ error: 'Failed to end meeting' });
   }
-  
-  if (meeting.hostId !== hostId) {
-    return res.status(403).json({ error: 'Only the host can end the meeting' });
-  }
-  
-  meeting.isActive = false;
-  meeting.isRecording = false;
-  meeting.endedAt = new Date().toISOString();
-  meeting.updatedAt = new Date().toISOString();
-  
-  // Kick all participants
-  io.to(meetingId).emit('meeting-ended');
-  
-  // Clear participants
-  roomParticipants[meetingId] = [];
-  
-  res.json(meeting);
 });
 
-// Upload meeting material
-app.post('/api/meetings/:meetingId/materials', upload.single('file'), (req, res) => {
-  const { meetingId } = req.params;
-  const { title, uploaderId } = req.body;
-  
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-  
-  let meeting = null;
-  
-  // Find meeting
-  Object.values(courseMeetings).forEach(meetings => {
-    const found = meetings.find(m => m.id === meetingId);
-    if (found) meeting = found;
-  });
-  
-  if (!meeting) {
-    return res.status(404).json({ error: 'Meeting not found' });
-  }
-  
-  const material = {
-    id: uuidv4(),
-    title: title || req.file.originalname,
-    filename: req.file.filename,
-    originalName: req.file.originalname,
-    mimeType: req.file.mimetype,
-    size: req.file.size,
-    uploaderId,
-    uploadedAt: new Date().toISOString(),
-    url: `/uploads/materials/${req.file.filename}`
-  };
-  
-  meeting.materials.push(material);
-  meeting.updatedAt = new Date().toISOString();
-  
-  // Notify meeting participants
-  io.to(meetingId).emit('material-uploaded', material);
-  
-  res.json(material);
-});
-
-// Get meeting materials
-app.get('/api/meetings/:meetingId/materials', (req, res) => {
-  const { meetingId } = req.params;
-  
-  let meeting = null;
-  
-  // Find meeting
-  Object.values(courseMeetings).forEach(meetings => {
-    const found = meetings.find(m => m.id === meetingId);
-    if (found) meeting = found;
-  });
-  
-  if (!meeting) {
-    return res.status(404).json({ error: 'Meeting not found' });
-  }
-  
-  res.json(meeting.materials || []);
-});
-
-// Upload meeting recording
-app.post('/api/meetings/:meetingId/recording', upload.single('recording'), (req, res) => {
-  const { meetingId } = req.params;
-  const { duration } = req.body;
-  
-  if (!req.file) {
-    return res.status(400).json({ error: 'No recording uploaded' });
-  }
-  
-  let meeting = null;
-  
-  // Find meeting
-  Object.values(courseMeetings).forEach(meetings => {
-    const found = meetings.find(m => m.id === meetingId);
-    if (found) meeting = found;
-  });
-  
-  if (!meeting) {
-    return res.status(404).json({ error: 'Meeting not found' });
-  }
-  
-  const recording = {
-    id: uuidv4(),
-    meetingId,
-    filename: req.file.filename,
-    originalName: req.file.originalname,
-    mimeType: req.file.mimetype,
-    size: req.file.size,
-    duration: duration || 0,
-    url: `/uploads/recordings/${req.file.filename}`,
-    createdAt: new Date().toISOString()
-  };
-  
-  meetingRecordings[meetingId] = recording;
-  meeting.recordingUrl = recording.url;
-  meeting.updatedAt = new Date().toISOString();
-  
-  res.json(recording);
-});
-
-// Get meeting recording
-app.get('/api/meetings/:meetingId/recording', (req, res) => {
-  const { meetingId } = req.params;
-  const recording = meetingRecordings[meetingId];
-  
-  if (!recording) {
-    return res.status(404).json({ error: 'Recording not found' });
-  }
-  
-  res.json(recording);
-});
+// Note: Material uploads now handled by Firebase Storage in the frontend
+// These endpoints kept for backward compatibility but materials are stored in Firestore
 
 // Track user progress on a meeting recording
 app.post('/api/meetings/:meetingId/progress', (req, res) => {
@@ -572,6 +414,13 @@ io.on('connection', (socket) => {
       roomParticipants[roomId] = [];
     }
     
+    // Check for duplicate sessions (same email already in room)
+    const duplicateSession = roomParticipants[roomId].find(p => p.userEmail === userEmail && p.userId !== userId);
+    if (duplicateSession) {
+      socket.emit('duplicate-session', { message: 'You are already in this meeting from another device' });
+      return;
+    }
+
     const existingParticipant = roomParticipants[roomId].find(p => p.userId === userId);
     if (!existingParticipant) {
       const participant = {
@@ -585,15 +434,19 @@ io.on('connection', (socket) => {
         joinedAt: new Date().toISOString(),
         socketId: socket.id
       };
-      
+
       roomParticipants[roomId].push(participant);
-      
+      console.log(`Added participant ${userId} to room ${roomId}. Total participants: ${roomParticipants[roomId].length}`);
+
       // Notify all participants in the room
       io.to(roomId).emit('participant-joined', participant);
       io.to(roomId).emit('participants-updated', roomParticipants[roomId]);
+    } else {
+      console.log(`Participant ${userId} already in room ${roomId}`);
     }
-    
+
     // Send current participants list to the new user
+    console.log(`Sending participants list to ${userId}. Count: ${roomParticipants[roomId].length}`);
     socket.emit('participants-updated', roomParticipants[roomId]);
     
     // Send chat history to the new user
@@ -651,25 +504,38 @@ io.on('connection', (socket) => {
     socket.leave(roomId);
   });
 
-  socket.on('send-message', ({ roomId, userId, userName, message, messageType = 'text', mediaUrl = null, mediaData = null, fileName = null, fileSize = null, mimeType = null }) => {
-    console.log('Received message:', { roomId, userId, userName, message, messageType, hasMediaData: !!mediaData, fileName, fileSize, mimeType });
-    
-    if (messageType === 'media' && mediaData) {
+  socket.on('send-message', ({ roomId, userId, userName, message, messageType = 'public', recipientId = null, mediaUrl = null, mediaData = null, fileName = null, fileSize = null, mimeType = null }) => {
+    console.log('Received message:', { roomId, userId, userName, message, messageType, recipientId, hasMediaData: !!mediaData, fileName, fileSize, mimeType });
+
+    if (mediaData) {
       console.log('Media data received - Length:', mediaData.length);
       console.log('Media data starts with data:URL:', mediaData.startsWith('data:'));
       console.log('Media data preview:', mediaData.substring(0, 100) + '...');
     }
+
+    // Check if it's an audio room
     const room = audioRooms.find(r => r.id === roomId);
-    
-    console.log('Room found:', room ? 'Yes' : 'No');
-    console.log('Chat allowed:', room ? room.allow_chat : 'Room not found');
-    
-    if (!room || !room.allow_chat) {
-      console.log('Blocking message - room not found or chat disabled');
+
+    // Check if there are participants (valid meeting/room)
+    const hasParticipants = roomParticipants[roomId] && roomParticipants[roomId].length > 0;
+
+    console.log('Audio room found:', room ? 'Yes' : 'No');
+    console.log('Has participants:', hasParticipants ? 'Yes' : 'No');
+
+    // If it's an audio room, check if chat is allowed
+    if (room && !room.allow_chat) {
+      console.log('Blocking message - chat disabled in audio room');
       socket.emit('message-error', 'Chat is not allowed in this room');
       return;
     }
-    
+
+    // If there are no participants and it's not an audio room, block it
+    if (!room && !hasParticipants) {
+      console.log('Blocking message - no participants in room');
+      socket.emit('message-error', 'Room not found');
+      return;
+    }
+
     const chatMessage = {
       id: Date.now().toString(),
       roomId,
@@ -677,6 +543,7 @@ io.on('connection', (socket) => {
       userName,
       message,
       messageType,
+      recipientId,
       mediaUrl,
       mediaData,
       fileName,
@@ -684,18 +551,39 @@ io.on('connection', (socket) => {
       mimeType,
       createdAt: new Date().toISOString()
     };
-    
+
     if (!chatMessages[roomId]) {
       chatMessages[roomId] = [];
     }
-    
+
     chatMessages[roomId].push(chatMessage);
-    
-    console.log('Broadcasting message to room:', roomId);
+
+    console.log('Broadcasting message to room:', roomId, 'Type:', messageType);
     console.log('Message content:', chatMessage);
-    
-    // Broadcast message to all participants in the room
-    io.to(roomId).emit('new-message', chatMessage);
+
+    // Handle private vs public messages
+    if (messageType === 'private' && recipientId) {
+      // Send to sender
+      socket.emit('new-message', chatMessage);
+
+      // Send to recipient only
+      const recipient = roomParticipants[roomId]?.find(p => p.userId === recipientId);
+      if (recipient) {
+        io.to(recipient.socketId).emit('new-message', chatMessage);
+        console.log('Sent private message to:', recipientId);
+      }
+    } else {
+      // Broadcast public message to all participants in the room
+      io.to(roomId).emit('new-message', chatMessage);
+    }
+  });
+
+  // Toggle chat lock (host only)
+  socket.on('toggle-chat-lock', ({ roomId, locked }) => {
+    console.log(`Chat lock ${locked ? 'enabled' : 'disabled'} for room ${roomId}`);
+
+    // Broadcast to all participants
+    io.to(roomId).emit('chat-locked', { locked });
   });
 
   socket.on('toggle-mute', ({ roomId, userId, isMuted }) => {
@@ -754,6 +642,23 @@ io.on('connection', (socket) => {
     room.updated_at = new Date().toISOString();
 
     io.to(roomId).emit('room-media-settings-updated', { allow_media });
+  });
+
+  // Reactions
+  socket.on('send-reaction', ({ roomId, userId, reaction }) => {
+    io.to(roomId).emit('reaction-sent', { userId, reaction });
+  });
+
+  // Raise/Lower Hand
+  socket.on('raise-hand', ({ roomId, userId, raised }) => {
+    console.log(`📋 Raise hand event received: userId=${userId}, roomId=${roomId}, raised=${raised}`);
+    io.to(roomId).emit('hand-raised', { userId, raised });
+    console.log(`📋 Broadcasted hand-raised event to room ${roomId}`);
+  });
+
+  // Update Permissions
+  socket.on('update-permissions', ({ roomId, settings }) => {
+    io.to(roomId).emit('permissions-updated', settings);
   });
 
   socket.on('host-lock-room', ({ roomId, hostId, lock }) => {
@@ -905,6 +810,22 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('participants-updated', roomParticipants[roomId]);
       }
     }
+  });
+
+  // Host ends meeting for everyone
+  socket.on('end-room', ({ roomId }) => {
+    console.log(`Host ending room ${roomId}`);
+
+    // Notify all participants
+    io.to(roomId).emit('room-closed');
+
+    // Clear all participants
+    if (roomParticipants[roomId]) {
+      roomParticipants[roomId] = [];
+    }
+
+    // Clear room data
+    deleteRoom(roomId);
   });
 
   socket.on('disconnect', () => {

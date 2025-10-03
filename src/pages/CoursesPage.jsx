@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   auth,
   createCourse,
@@ -12,7 +13,7 @@ import { BookOpen, PlusCircle, UserPlus, Users } from 'lucide-react';
 
 const CoursesPage = () => {
   const navigate = useNavigate();
-  const userId = auth.currentUser?.uid;
+  const [userId, setUserId] = useState(null);
   const [tab, setTab] = useState('explore'); // explore | my | enrolled
   const [courses, setCourses] = useState([]);
   const [myCourses, setMyCourses] = useState([]);
@@ -22,9 +23,20 @@ const CoursesPage = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
+  // Listen to auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUserId(user?.uid || null);
+    });
+    return unsubscribe;
+  }, []);
+
   useEffect(() => {
     const load = async () => {
-      if (!userId) return;
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const [all, mine, myEnroll] = await Promise.all([
@@ -35,6 +47,8 @@ const CoursesPage = () => {
         setCourses(all);
         setMyCourses(mine);
         setEnrolled(myEnroll);
+      } catch (error) {
+        console.error('Error loading courses:', error);
       } finally {
         setLoading(false);
       }

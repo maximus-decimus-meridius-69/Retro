@@ -1,8 +1,8 @@
 import React from 'react';
-import SimpleMeetingRoom from '../components/SimpleMeetingRoom';
+import VideoMeetingRoom from '../components/VideoMeetingRoom';
 
 const MeetingPage = () => {
-  return <SimpleMeetingRoom />;
+  return <VideoMeetingRoom />;
 };
 
 export default MeetingPage;

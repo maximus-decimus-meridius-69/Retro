@@ -60,9 +60,7 @@ const AudioRoomComponent = ({ roomId, userId, userName, isHost }) => {
     // Get local media stream
     navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
       localStreamRef.current = stream;
-      if (audioRef.current) {
-        audioRef.current.srcObject = stream;
-      }
+      // Don't play local stream to avoid echo/feedback
     }).catch((error) => {
       console.error('Error accessing microphone:', error);
     });
@@ -71,6 +69,7 @@ const AudioRoomComponent = ({ roomId, userId, userName, isHost }) => {
     peerRef.current.on('call', (call) => {
       call.answer(localStreamRef.current);
       call.on('stream', (remoteStream) => {
+        // Only play remote stream
         if (audioRef.current) {
           audioRef.current.srcObject = remoteStream;
         }
